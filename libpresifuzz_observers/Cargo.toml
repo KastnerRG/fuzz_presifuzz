@@ -7,6 +7,7 @@ name = "libpresifuzz_observers"
 authors = ["Nassim Corteggiani <nassim.corteggiani@intel.com>, Sergej Schumilo <sergej.schumilo@intel.com>"]
 version = "0.0.2"
 edition = "2021"
+build = "build.rs"
 description = "Observer to collect coverage from vdb using VERDI NPI"
 repository = "https://github.com/IntelLabs/PreSiFuzz"
 readme = "README.md"
@@ -19,9 +20,6 @@ default = ["std", "csv_dump"]
 input_injection = []
 std = []
 csv_dump = []
-
-[build]
-build = "build.rs"
 
 [build-dependencies]
 cc = "1"
