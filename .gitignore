@@ -1,3 +1,5 @@
+fuzzers/secworks-vcs/*rtl*
+
 # Original Authors: https://github.com/github/gitignore
 # SPDX-License-Identifier: CC0-1.0
 
