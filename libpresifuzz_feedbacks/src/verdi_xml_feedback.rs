@@ -110,8 +110,19 @@ where
 
         let mut interesting : bool = self.compare_coverage_map(o_map, capacity);
 
-        self.score = (o_map[0] as f32 / o_map[1] as f32) * 100.0;
-        println!("Analyzing xml from vdb with coverage {} score at {}% for {}/{}", self.name, self.score, o_map[0], o_map[1]);
+        if o_map.len() >= 2 && o_map[1] != 0 {
+            self.score = (o_map[0] as f32 / o_map[1] as f32) * 100.0;
+            println!(
+                "Analyzing xml from vdb with coverage {} score at {}% for {}/{}",
+                self.name, self.score, o_map[0], o_map[1]
+            );
+        } else {
+            self.score = 0.0;
+            println!(
+                "Analyzing xml from vdb with coverage {} unavailable (map_len={})",
+                self.name, o_map.len()
+            );
+        }
 
         if interesting {
         
@@ -521,4 +532,3 @@ mod tests {
         }
     }
 }
-

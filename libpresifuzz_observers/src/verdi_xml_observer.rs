@@ -216,7 +216,7 @@ where
        &mut self,
         _state: &mut S,
         _input: &S::Input,
-        _exit_kind: &ExitKind,
+        exit_kind: &ExitKind,
     ) -> Result<(), Error> {
 
         self.map.clear();
@@ -235,16 +235,28 @@ where
 
         let xml_file = format!("{}/{}/snps/coverage/db/testdata/test/{}", self.workdir, self.vdb, xml_file);
 
-        // Open the gzip-compressed file
-        let error_msg = format!("Unable to open file xml coverage file {}", xml_file);
-        let mut coverage_file = File::open(xml_file).expect(error_msg.as_str());
+        // On crashing/timeouting runs, VCS may not emit the coverage XML.
+        // Keep fuzzing alive and let crash objective handle the testcase.
+        let mut coverage_file = match File::open(&xml_file) {
+            Ok(f) => f,
+            Err(_) => {
+                if matches!(exit_kind, ExitKind::Crash | ExitKind::Timeout | ExitKind::Oom) {
+                    return Ok(());
+                }
+                return Ok(());
+            }
+        };
         
         let mut buffer = Vec::new();
-        coverage_file.read_to_end(&mut buffer).expect("Unable to read the xml cov file tail the end");
+        if coverage_file.read_to_end(&mut buffer).is_err() {
+            return Ok(());
+        }
 
         let mut gz = GzDecoder::new(&buffer[..]);
         let mut xml_str = String::new();
-        gz.read_to_string(&mut xml_str).expect("Unable to unzip xml cove file using GzDecoder");
+        if gz.read_to_string(&mut xml_str).is_err() {
+            return Ok(());
+        }
 
         let mut concatenated_bits = String::new();
 
@@ -289,7 +301,10 @@ where
             println!("{}", bit_chunk);
             
             // translates str to u32 with radix 2
-            let value = u32::from_str_radix(bit_chunk, 2).unwrap();
+            let value = match u32::from_str_radix(bit_chunk, 2) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
 
             self.covered += value.count_ones();
 
@@ -345,4 +360,3 @@ where
         Ok(())
     }
 }
-
