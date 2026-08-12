@@ -14,11 +14,6 @@ use libafl::monitors::tui::TuiMonitor;
 #[cfg(not(feature = "tui"))]
 use libafl::{
     feedback_and_fast, feedback_or,
-    bolts::{
-        current_nanos,
-        rands::StdRand,
-        tuples::tuple_list,
-    },
     events::SimpleEventManager,
     feedbacks::{CrashFeedback, TimeFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
@@ -32,23 +27,17 @@ use libafl::{
     inputs::bytes::BytesInput,
 };
 use libafl::executors::command::CommandConfigurator;
-use libafl::prelude::HitcountsMapObserver;
-use libafl::prelude::ConstMapObserver;
-use libafl::prelude::MaxMapFeedback;
-use libafl::prelude::ShMemId;
 use libafl::prelude::Input;
 use libafl::prelude::HasTargetBytes;
 use std::process::Child;
 use std::process::Stdio;
 use std::path::Path;
-use libafl::bolts::AsSlice;
 use std::process::Command;
 use std::io::Write;
-use libafl::bolts::shmem::UnixShMemProvider;
-use libafl::prelude::ShMemProvider;
-use libafl::bolts::AsMutSlice;
-use libafl::prelude::ShMem;
 use libafl::Error;
+// bolts lives in its own crate as of libafl 0.11.
+use libafl_bolts::{current_nanos, rands::StdRand, tuples::tuple_list, AsSlice};
+use core::time::Duration;
 
 use libafl_verilator::verilator_observer::VerilatorObserver;
 use libafl_verilator::verilator_feedback::VerilatorFeedback;
@@ -64,7 +53,7 @@ pub fn main() {
             Arg::new("corpus")
                 .help("The directory to read initial inputs from ('seeds')")
                 .required(true)
-                .takes_value(true),
+                .action(clap::ArgAction::Set),
         )
         .arg(
             Arg::new("timeout")
@@ -77,13 +66,14 @@ pub fn main() {
             Arg::new("debug_child")
                 .help("If not set, the child's stdout and stderror will be redirected to /dev/null")
                 .short('d')
-                .long("debug-child"),
+                .long("debug-child")
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("arguments")
                 .help("Arguments passed to the target")
-                .multiple_values(true)
-                .takes_value(true),
+                .num_args(0..)
+                .action(clap::ArgAction::Set),
         )
         .arg(
             Arg::new("signal")
@@ -107,7 +97,7 @@ pub fn main() {
     // This one is composed by two Feedbacks in OR
     let mut feedback = feedback_or!(
         VerilatorFeedback::new_with_observer("verilator_map", map_size, &String::from("logs/")),
-        TimeFeedback::new_with_observer(&time_observer)
+        TimeFeedback::with_observer(&time_observer)
     );
 
     // A feedback to choose if an input is a solution or not
@@ -115,7 +105,7 @@ pub fn main() {
     let mut objective = ();
     
     // If not restarting, create a State from scratch
-    let corpus_dir = PathBuf::from(res.value_of("corpus").unwrap().to_string());
+    let corpus_dir = PathBuf::from(res.get_one::<String>("corpus").unwrap().to_string());
     let mut state = StdState::new(
         // RNG
         StdRand::with_seed(current_nanos()),
@@ -174,12 +164,18 @@ pub fn main() {
 
             Ok(child)
         }
+
+        // Required by CommandConfigurator as of libafl 0.11. A Verilator AES
+        // run is milliseconds; anything near this means the model wedged.
+        fn exec_timeout(&self) -> Duration {
+            Duration::from_secs(5)
+        }
     }
 
     let mut executor = MyExecutor { }.into_executor(tuple_list!(verilator_observer, time_observer));
 
     // Load initial inputs from corpus
-    let corpus_dir = PathBuf::from(res.value_of("corpus").unwrap().to_string());
+    let corpus_dir = PathBuf::from(res.get_one::<String>("corpus").unwrap().to_string());
     state
         .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[corpus_dir])
         .expect("Failed to load the initial corpus");

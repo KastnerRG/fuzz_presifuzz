@@ -18,7 +18,10 @@
 OTIPFuzzTb* tb = NULL;
 
 // needs to be defined so Verilog can call $time
-double sc_time_stamp() { return tb->get_main_time(); }
+// Verilator 5's VerilatedContext::addModel() calls this while the model is
+// still being constructed, i.e. before `tb` is assigned. Verilator 4 called it
+// later, so the null deref never showed up there.
+double sc_time_stamp() { return tb ? tb->get_main_time() : 0; }
 
 int main(int argc, char** argv, char** env) {
   // Instantiate testbench

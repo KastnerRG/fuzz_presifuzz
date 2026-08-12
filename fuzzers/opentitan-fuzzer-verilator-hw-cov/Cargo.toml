@@ -15,7 +15,9 @@ std = []
 
 [dependencies]
 clap = { version = "4.5.38", features = ["default"] }
-libafl = { version = "0.11.2", features = ["std"], no-default-features = true } 
+libafl = { version = "0.11.2", features = ["std"], default-features = false }
+# libafl 0.11 moved the `bolts` module out into its own crate.
+libafl_bolts = { version = "0.11.2" }
 nix = "0.24"
 num-traits = { version = "0.2", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["alloc"] } # serialization lib
@@ -24,4 +26,5 @@ ahash = { version = "0.7", default-features=false, features=["compile-time-rng"]
 intervaltree = { version = "0.2.7", default-features = false, features = ["serde"] }
 libc = "0.2"
 fs_extra = "1.2.0"
-libafl_verilator = { path = "../../libafl_verilator"}
+# Crate name is still libafl_verilator; its directory was renamed.
+libafl_verilator = { path = "../../libpresifuzz_verilator"}

@@ -6,8 +6,10 @@
 
 rm -rf build
 
+# Release, not debug: libafl_bolts 0.11.2 anymap does an under-aligned pointer
+# dereference that current rustc aborts on under debug assertions.
 cargo clean \
-&& cargo build \
+&& cargo build --release \
 && rm -rf fusesoc_libraries fusesoc.conf \
 && fusesoc library add opentitan https://github.com/timothytrippel/opentitan.git \
 && cd ./fusesoc_libraries/opentitan \
@@ -22,5 +24,5 @@ cargo clean \
 && fusesoc run --build --flag=fileset_ip --target=syn lowrisc:ip:aes:0.6 --SYNTHESIS --verilator_options="+incdir+$(pwd)/tb -I$(pwd)/tb/include --coverage-toggle --timing --report-unoptflat --cc --exe $(pwd)/tb/src/ot_ip_fuzz_tb.cpp $(pwd)/tb/src/stdin_fuzz_tb.cpp $(pwd)/tb/src/tlul_host_tb.cpp $(pwd)/tb/src/verilator_tb.cpp $(pwd)/tb/src/main.cpp " --make_options "CXXFLAGS=-I$(pwd)/tb/include" \
 && mv build/lowrisc_ip_aes_0.6 build/empty \
 && mv build/empty/syn-verilator/* ./build \
-&& ./target/debug/opentitan-fuzzer ./seeds
+&& ./target/release/opentitan-fuzzer ./seeds
 
