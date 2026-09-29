@@ -18,10 +18,11 @@
 OTIPFuzzTb* tb = NULL;
 
 // needs to be defined so Verilog can call $time
-double sc_time_stamp() { return tb->get_main_time(); }
+double sc_time_stamp() { return tb ? tb->get_main_time() : 0; }
 
 int main(int argc, char** argv, char** env) {
   // Instantiate testbench
+  Verilated::threadContextp()->threads(1);
   tb = new OTIPFuzzTb(argc, argv);
 
   // Simulate the DUT

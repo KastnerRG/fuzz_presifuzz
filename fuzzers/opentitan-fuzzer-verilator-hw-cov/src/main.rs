@@ -9,18 +9,10 @@ use std::{
 use clap::Arg;
 use clap::Command as clap_cmd;
 
-#[cfg(feature = "tui")]
-use libafl::monitors::tui::TuiMonitor;
-#[cfg(not(feature = "tui"))]
 use libafl::{
-    feedback_and_fast, feedback_or,
-    bolts::{
-        current_nanos,
-        rands::StdRand,
-        tuples::tuple_list,
-    },
+    feedback_or,
     events::SimpleEventManager,
-    feedbacks::{CrashFeedback, TimeFeedback},
+    feedbacks::TimeFeedback,
     fuzzer::{Fuzzer, StdFuzzer},
     monitors::SimpleMonitor,
     observers::{TimeObserver},
@@ -31,29 +23,19 @@ use libafl::{
     corpus::{OnDiskCorpus, InMemoryCorpus},
     inputs::bytes::BytesInput,
 };
+use libafl_bolts::{current_nanos, rands::StdRand, tuples::tuple_list, AsSlice};
 use libafl::executors::command::CommandConfigurator;
-use libafl::prelude::HitcountsMapObserver;
-use libafl::prelude::ConstMapObserver;
-use libafl::prelude::MaxMapFeedback;
-use libafl::prelude::ShMemId;
 use libafl::prelude::Input;
 use libafl::prelude::HasTargetBytes;
 use std::process::Child;
 use std::process::Stdio;
-use std::path::Path;
-use libafl::bolts::AsSlice;
 use std::process::Command;
 use std::io::Write;
-use libafl::bolts::shmem::UnixShMemProvider;
-use libafl::prelude::ShMemProvider;
-use libafl::bolts::AsMutSlice;
-use libafl::prelude::ShMem;
+use std::time::Duration;
 use libafl::Error;
 
 use libafl_verilator::verilator_observer::VerilatorObserver;
 use libafl_verilator::verilator_feedback::VerilatorFeedback;
-
-mod vcs_executor;
 
 #[allow(clippy::similar_names)]
 pub fn main() {
@@ -107,7 +89,7 @@ pub fn main() {
     // This one is composed by two Feedbacks in OR
     let mut feedback = feedback_or!(
         VerilatorFeedback::new_with_observer("verilator_map", map_size, &String::from("logs/")),
-        TimeFeedback::new_with_observer(&time_observer)
+        TimeFeedback::with_observer(&time_observer)
     );
 
     // A feedback to choose if an input is a solution or not
@@ -115,7 +97,6 @@ pub fn main() {
     let mut objective = ();
     
     // If not restarting, create a State from scratch
-    let corpus_dir = PathBuf::from(res.value_of("corpus").unwrap().to_string());
     let mut state = StdState::new(
         // RNG
         StdRand::with_seed(current_nanos()),
@@ -150,9 +131,14 @@ pub fn main() {
     // Create the executor for an in-process function with just one observer
     #[derive(Debug)]
     struct MyExecutor {
+        timeout: Duration,
     }
 
     impl CommandConfigurator for MyExecutor {
+        fn exec_timeout(&self) -> Duration {
+            self.timeout
+        }
+
         fn spawn_child<I: Input + HasTargetBytes>(&mut self, input: &I) -> Result<Child, Error> {
 
             let mut command = Command::new("./build/Vaes_tb");
@@ -176,7 +162,10 @@ pub fn main() {
         }
     }
 
-    let mut executor = MyExecutor { }.into_executor(tuple_list!(verilator_observer, time_observer));
+    let timeout_ms = res.value_of("timeout").unwrap().parse::<u64>()
+        .expect("--timeout must be an integer number of milliseconds");
+    let mut executor = MyExecutor { timeout: Duration::from_millis(timeout_ms) }
+        .into_executor(tuple_list!(verilator_observer, time_observer));
 
     // Load initial inputs from corpus
     let corpus_dir = PathBuf::from(res.value_of("corpus").unwrap().to_string());
@@ -193,4 +182,3 @@ pub fn main() {
         .expect("Error in the fuzzing loop");
 
 }
-

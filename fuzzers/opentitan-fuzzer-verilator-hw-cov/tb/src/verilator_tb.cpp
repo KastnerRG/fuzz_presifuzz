@@ -15,6 +15,8 @@
 #include "verilator_tb.h"
 
 #include <iostream>
+#include <cstdio>
+#include <cstdlib>
 
 // Constructor: initialize Verilator, and open a VCD trace and the testbench
 // input file
@@ -47,7 +49,12 @@ VerilatorTb::~VerilatorTb() {
 #if VM_COVERAGE
   //  Save coverage analysis (since test passed)
   Verilated::mkdir("logs");
-  VerilatedCov::write("logs/coverage.dat");
+  // Keep the last complete dump if the campaign stops during the next write.
+  VerilatedCov::write("logs/coverage.tmp");
+  if (std::rename("logs/coverage.tmp", "logs/coverage.dat") != 0) {
+    std::perror("publish coverage");
+    std::abort();
+  }
 #endif
 }
 

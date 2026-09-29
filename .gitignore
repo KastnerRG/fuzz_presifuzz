@@ -29,3 +29,8 @@ build.log
 
 # Cargo.locks
 Cargo.lock
+!fuzzers/opentitan-fuzzer-verilator-hw-cov/Cargo.lock
+
+# Runtime output from the standalone OpenTitan AES example.
+fuzzers/opentitan-fuzzer-verilator-hw-cov/logs/
+fuzzers/opentitan-fuzzer-verilator-hw-cov/solutions/

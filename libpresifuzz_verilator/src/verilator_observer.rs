@@ -57,7 +57,7 @@ impl VerilatorObserver {
             vdb: vdb.to_string(),
             initial: 0,
             cnt: size,
-            map: Vec::<u32>::with_capacity(size)
+            map: vec![0; size]
         }
     }
 
@@ -96,8 +96,8 @@ where
         _exit_kind: &ExitKind,
     ) -> Result<(), Error> {
 
-        unsafe {
-            self.map.set_len(self.cnt);
+        {
+            self.map.resize(self.cnt, 0);
  
             let contents: String = fs::read_to_string(&self.vdb)
                 .expect("Unable to open Verilator coverage file at");

@@ -4,28 +4,57 @@ SPDX-FileCopyrightText: 2022 Intel Corporation
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Fuzzing OpenTitan
-OpenTitan is an open-source silicon root-of-trust, please refer to [the official website](https://opentitan.org/) for more details.
+# Fuzzing OpenTitan AES
 
-In the following, we explain how to start fuzzing OpenTitan AES IP using libAFL + Verilator (toggle coverage).
+This example fuzzes the OpenTitan AES IP with LibAFL and Verilator toggle coverage.
+It builds and runs independently from this repository's Docker setup.
+
+## Dependencies
+
+Install Git, Make, a C++ compiler, Python 3 with `venv`, Rustup, and Verilator 5.038.
+The example's `rust-toolchain.toml` selects Rust 1.90.0.
+Its committed `Cargo.lock` and pinned upstream LibAFL revision include the TypeId alignment fix needed by this Rust version.
+
+Install the tested Python tools in a virtual environment:
+
+```sh
+python3 -m venv "$HOME/.venvs/presifuzz"
+source "$HOME/.venvs/presifuzz/bin/activate"
+pip install setuptools==68.2.2 setuptools-scm==7.1.0 wheel
+pip install --no-build-isolation \
+  git+https://github.com/lowRISC/fusesoc.git@14dfc825ced58fe1fb343662fa80fc4fbd0fdc50 \
+  git+https://github.com/lowRISC/edalize.git@5ae2c3e1ca306e27d81ce5fcc769f62cb7ac42d0 \
+  hjson==3.1.0 Mako==1.4.3
 ```
+
+Ensure `cargo`, `fusesoc`, and `verilator` are on `PATH` when building.
+The first build downloads the pinned Rust dependencies and OpenTitan revision `c9262fc2964e47b80d2a2f652e58014c42b651d7`.
+
+## Build and run
+
+From the PreSiFuzz repository root:
+
+```sh
 cd fuzzers/opentitan-fuzzer-verilator-hw-cov
-
-bash ./run.sh
+BUILD_JOBS=8 ./build.sh
+./run.sh
 ```
-Note: The docker build is deprecated. Instead we use pip and fusesoc to install the requirements.
-The script also patches the `aes.core` file to switch from icarus to Verilator, and set `aes_tb` as top module.
-However, the Verilator testbench is written in c++ and saved into the `tb` folder.
 
-After each simulation completion, Verilator saves the toggle coverage onto the disk at 'logs/coverage.dat'.
-Please, refer to [Verilator-coverage](https://verilator.org/guide/latest/exe_verilator_coverage.html) if you need to aggregate the results.
+`build.sh` builds both the Rust fuzzer and the AES simulator.
+`run.sh` reuses that build entrypoint and starts fuzzing the bundled `seeds` directory.
+Subsequent invocations preserve the downloaded RTL and build caches.
+Pass a different corpus or fuzzer options as arguments to `run.sh`, or run `./target/debug/opentitan-fuzzer --help`.
+Stop a campaign with Ctrl+C.
 
-# Credits
+The example-owned `aes.core` selects the local AES replacement and testbench under `tb/`.
+The build creates a FuseSoC overlay under `build/` and leaves the downloaded OpenTitan source unchanged.
+The simulator is available as `build/Vaes_tb`.
+Each completed simulation publishes its toggle coverage atomically to `logs/coverage.dat`.
+See [Verilator's coverage documentation](https://verilator.org/guide/latest/exe_verilator_coverage.html) for aggregation options.
 
-This example replicates the work from [Timothy Tripple, et all](https://github.com/googleinterns/hw-fuzzing), except that we use Verilator hardware coverage as a feedback signal for the fuzzer.
-The seeds provided in the 'seeds' comes directly from [this repository](https://github.com/googleinterns/hw-fuzzing).
-The testbench provided in the 'tb' comes directly from [this repository](https://github.com/googleinterns/hw-fuzzing).
+## Credits
 
-The RTL code comes from the [OpenTitan team](https://opentitan.org/).
-
+This example adapts [Timothy Trippel et al.'s hardware fuzzing work](https://github.com/googleinterns/hw-fuzzing) to use Verilator hardware coverage as LibAFL feedback.
+The seeds and C++ testbench originate from that project.
+The RTL comes from the [OpenTitan team](https://opentitan.org/).
 

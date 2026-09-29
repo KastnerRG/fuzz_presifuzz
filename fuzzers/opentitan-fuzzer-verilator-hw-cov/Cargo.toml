@@ -14,8 +14,11 @@ tui = []
 std = []
 
 [dependencies]
-clap = { version = "4.5.38", features = ["default"] }
-libafl = { version = "0.11.2", features = ["std"], no-default-features = true } 
+clap = { version = "=3.2.25", features = ["default"] }
+# This upstream revision fixes TypeId alignment on modern Rust.
+# Keep both crates at the same revision because their internal APIs must match.
+libafl = { git = "https://github.com/AFLplusplus/LibAFL.git", rev = "9b780cc0a7d9e95d116df9b0da7efd957af0305e", features = ["std"], default-features = false }
+libafl_bolts = { git = "https://github.com/AFLplusplus/LibAFL.git", rev = "9b780cc0a7d9e95d116df9b0da7efd957af0305e" }
 nix = "0.24"
 num-traits = { version = "0.2", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["alloc"] } # serialization lib
@@ -24,4 +27,4 @@ ahash = { version = "0.7", default-features=false, features=["compile-time-rng"]
 intervaltree = { version = "0.2.7", default-features = false, features = ["serde"] }
 libc = "0.2"
 fs_extra = "1.2.0"
-libafl_verilator = { path = "../../libafl_verilator"}
+libafl_verilator = { path = "../../libpresifuzz_verilator" }
