@@ -64,7 +64,9 @@ where
         }
 
         if interesting {
-            self.history = observer.map().clone().to_vec();
+            for (previous, observed) in self.history.iter_mut().zip(o_map) {
+                *previous = (*previous).max(*observed);
+            }
             self.id += 1;
         }
         Ok(interesting)

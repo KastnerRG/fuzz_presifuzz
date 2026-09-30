@@ -12,7 +12,7 @@ use clap::Command as clap_cmd;
 use libafl::{
     feedback_or,
     events::SimpleEventManager,
-    feedbacks::TimeFeedback,
+    feedbacks::{CrashFeedback, TimeFeedback, TimeoutFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
     monitors::SimpleMonitor,
     observers::{TimeObserver},
@@ -92,9 +92,9 @@ pub fn main() {
         TimeFeedback::with_observer(&time_observer)
     );
 
-    // A feedback to choose if an input is a solution or not
-    // We want to do the same crash deduplication that AFL does
-    let mut objective = ();
+    // Preserve failing executions independently of coverage feedback.
+    // This does not provide a functional AES oracle or crash deduplication.
+    let mut objective = feedback_or!(CrashFeedback::new(), TimeoutFeedback::new());
     
     // If not restarting, create a State from scratch
     let mut state = StdState::new(

@@ -86,6 +86,13 @@ where
         for x in self.map.iter_mut() {
             *x = initial;
         }
+        // A crashing child may never publish coverage; never reuse the last
+        // successful execution's dump for that child.
+        match fs::remove_file(&self.vdb) {
+            Ok(()) => (),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error.into()),
+        }
         Ok(())
     }
 
@@ -93,14 +100,18 @@ where
         &mut self,
         _state: &mut S,
         _input: &S::Input,
-        _exit_kind: &ExitKind,
+        exit_kind: &ExitKind,
     ) -> Result<(), Error> {
 
         {
             self.map.resize(self.cnt, 0);
  
-            let contents: String = fs::read_to_string(&self.vdb)
-                .expect("Unable to open Verilator coverage file at");
+            let contents = match fs::read_to_string(&self.vdb) {
+                Ok(contents) => contents,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound
+                    && *exit_kind != ExitKind::Ok => return Ok(()),
+                Err(error) => return Err(error.into()),
+            };
 
             let mut idx = 0;
 
@@ -127,6 +138,9 @@ where
                     idx += 1;
                 }
                 //End here
+            }
+            if idx == 0 && *exit_kind == ExitKind::Ok {
+                return Err(Error::illegal_state("Verilator coverage contains no counters"));
             }
         }
 
