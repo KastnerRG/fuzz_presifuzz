@@ -8,14 +8,13 @@ use std::{
 };
 use std::process::Command as pcmd;
 use libafl::{
-    bolts::{
-        // rands::Rand,
-        AsSlice
-    },
     executors::command::CommandConfigurator,
     inputs::{HasTargetBytes, Input},
     Error,
 };
+// bolts lives in its own crate as of libafl 0.11.
+use libafl_bolts::AsSlice;
+use core::time::Duration;
 use std::fs::File;
 use std::path::Path;
 use std::io::prelude::*;
@@ -75,6 +74,11 @@ impl CommandConfigurator for VCSExecutor
         // thread::sleep(ten_millis);
 
         Ok(child)
+    }
+
+    // Required by CommandConfigurator as of libafl 0.11.
+    fn exec_timeout(&self) -> Duration {
+        Duration::from_secs(5)
     }
 }
 
