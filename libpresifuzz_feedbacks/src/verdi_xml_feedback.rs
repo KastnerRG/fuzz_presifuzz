@@ -24,7 +24,6 @@ use libafl_bolts::Named;
 use libafl_bolts::AsSlice;
 use libafl::monitors::{UserStats, UserStatsValue, AggregatorOps};
 use libafl::events::{Event};
-use std::process::Command;
 use std::path::Path;
 use libafl::inputs::Input;
 
@@ -43,7 +42,6 @@ pub struct VerdiFeedback
     name: String,
     id: u32,
     workdir: String,
-    score: f32,
     save_on_new_coverage: bool,
     start_time: Duration,
     minimized: bool,
@@ -53,7 +51,7 @@ impl VerdiFeedback
 {
     fn compare_coverage_map(&mut self, o_map: &[u32], capacity: usize) -> bool {
             
-        if self.history.capacity() < capacity {
+        if self.history.len() < capacity {
             self.history.resize(capacity, 0);
         }
 
@@ -64,7 +62,7 @@ impl VerdiFeedback
             .sum::<u32>() != 0;
     }
 
-    fn update_history_map(&mut self, o_map: &[u32], capacity: usize) -> (u32, u32) {
+    fn update_history_map(&mut self, o_map: &[u32], _capacity: usize) -> (u32, u32) {
 
         // update history so that it includes all bits that are set in o_map but not currently set in history
         assert_eq!(self.history.len(), o_map.len());
@@ -108,29 +106,15 @@ where
 
         let o_map = observer.my_map().as_slice();
 
-        let mut interesting : bool = self.compare_coverage_map(o_map, capacity);
-
-        if o_map.len() >= 2 && o_map[1] != 0 {
-            self.score = (o_map[0] as f32 / o_map[1] as f32) * 100.0;
-            println!(
-                "Analyzing xml from vdb with coverage {} score at {}% for {}/{}",
-                self.name, self.score, o_map[0], o_map[1]
-            );
-        } else {
-            self.score = 0.0;
-            println!(
-                "Analyzing xml from vdb with coverage {} unavailable (map_len={})",
-                self.name, o_map.len()
-            );
-        }
+        let interesting = self.compare_coverage_map(o_map, capacity);
 
         if interesting {
         
             let (covered, coverable) = self.update_history_map(o_map, capacity);
 
-            self.score = (covered as f32 / coverable as f32) * 100.0;
+            let score = (covered as f32 / coverable as f32) * 100.0;
 
-            println!("Merge coverage {} score is {}% {}/{}", self.name, self.score, covered, coverable);
+            println!("Merge coverage {} score is {}% {}/{}", self.name, score, covered, coverable);
 
             // Save scrore into state
             manager.fire(
@@ -205,7 +189,6 @@ impl VerdiFeedback
             history: Vec::<u32>::new(),
             id: 0,
             workdir: workdir.to_string(),
-            score: 0.0,
             save_on_new_coverage: false,
             start_time: current_time(),
             minimized: minimized,

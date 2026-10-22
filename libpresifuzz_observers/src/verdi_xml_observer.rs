@@ -54,8 +54,6 @@ pub struct VerdiXMLMapObserver
     workdir: String,
     metric: VerdiCoverageMetric,
     filter: String,
-    covered: u32,
-    coverable: u32,
 }
 
 impl VerdiXMLMapObserver
@@ -75,8 +73,6 @@ impl VerdiXMLMapObserver
             metric,
             filter: filter.to_string(),
             vdb: vdb.to_string(),
-            covered: 0,
-            coverable: 0
         }
     }
   
@@ -92,13 +88,6 @@ impl VerdiXMLMapObserver
         self.map.as_slice()
     }
     
-    pub fn covered(&self) -> u32 {
-        self.covered
-    }
-    
-    pub fn coverable(&self) -> u32 {
-        self.coverable
-    }
 }
 
 impl Named for VerdiXMLMapObserver
@@ -154,11 +143,11 @@ impl MapObserver for VerdiXMLMapObserver
 
     fn hash(&self) -> u64 {
 
-        let slice = &self.map.as_slice();
+        let slice = self.map.as_slice();
 
         let mut hasher = AHasher::new_with_keys(0, 0);
         let ptr = slice.as_ptr() as *const u8;
-        let map_size = slice.len() / core::mem::size_of::<u32>();
+        let map_size = core::mem::size_of_val(slice);
         unsafe {
             hasher.write(from_raw_parts(ptr, map_size));
         }
@@ -220,9 +209,6 @@ where
     ) -> Result<(), Error> {
 
         self.map.clear();
-        self.covered = 0;
-        self.coverable = 0;
-
         // Path to the gzip-compressed XML file
         let xml_file = match self.metric {
             VerdiCoverageMetric::Toggle => "tgl.verilog.data.xml",
@@ -235,30 +221,23 @@ where
 
         let xml_file = format!("{}/{}/snps/coverage/db/testdata/test/{}", self.workdir, self.vdb, xml_file);
 
-        // On crashing/timeouting runs, VCS may not emit the coverage XML.
-        // Keep fuzzing alive and let crash objective handle the testcase.
-        let mut coverage_file = match File::open(&xml_file) {
-            Ok(f) => f,
-            Err(_) => {
-                if matches!(exit_kind, ExitKind::Crash | ExitKind::Timeout | ExitKind::Oom) {
-                    return Ok(());
-                }
-                return Ok(());
-            }
-        };
-        
-        let mut buffer = Vec::new();
-        if coverage_file.read_to_end(&mut buffer).is_err() {
+        if matches!(exit_kind, ExitKind::Crash | ExitKind::Timeout | ExitKind::Oom) {
             return Ok(());
         }
+        let mut coverage_file = File::open(&xml_file)
+            .map_err(|error| Error::unknown(error.to_string()))?;
+
+        let mut buffer = Vec::new();
+        coverage_file.read_to_end(&mut buffer)
+            .map_err(|error| Error::unknown(error.to_string()))?;
 
         let mut gz = GzDecoder::new(&buffer[..]);
         let mut xml_str = String::new();
-        if gz.read_to_string(&mut xml_str).is_err() {
-            return Ok(());
-        }
+        gz.read_to_string(&mut xml_str)
+            .map_err(|error| Error::unknown(error.to_string()))?;
 
         let mut concatenated_bits = String::new();
+        let filter_prefix = format!("{}.", self.filter);
 
         let cursor = Cursor::new(xml_str);
 
@@ -268,14 +247,17 @@ where
                     // Find the start and end of the name attribute
                     if let Some(name_start) = line.find(r#"name=""#) {
                         let name_start = name_start + r#"name=""#.len();
-                        if line[name_start..].find('"').is_some() {
+                        if let Some(name_end) = line[name_start..].find('"') {
+                            let name = &line[name_start..name_start + name_end];
+                            if !self.filter.is_empty() && name != self.filter &&
+                                !name.starts_with(&filter_prefix) {
+                                continue;
+                            }
                             // Find the start and end of the value attribute
                             if let Some(value_start) = line.find(r#"value=""#) {
                                 let value_start = value_start + r#"value=""#.len();
                                 if let Some(value_end) = line[value_start..].find('"') {
                                     let value = &line[value_start..value_start + value_end];
-                                    self.coverable += value.len() as u32;
-
                                     concatenated_bits.push_str(value);
                                 }
                             }
@@ -283,6 +265,10 @@ where
                     }
                 }
             }
+        }
+
+        if concatenated_bits.is_empty() {
+            return Err(Error::unknown("Coverage filter selected no points"));
         }
 
         // we saved the bitmap in str format into concatenated_bits
@@ -298,15 +284,11 @@ where
             let end = (start + 32).min(bit_len);
             let bit_chunk = &concatenated_bits[start..end];
 
-            println!("{}", bit_chunk);
-            
             // translates str to u32 with radix 2
             let value = match u32::from_str_radix(bit_chunk, 2) {
                 Ok(v) => v,
-                Err(_) => continue,
+                Err(_) => return Err(Error::unknown("Invalid coverage bitmap")),
             };
-
-            self.covered += value.count_ones();
 
             self.map.push(value);
             start += 32;
